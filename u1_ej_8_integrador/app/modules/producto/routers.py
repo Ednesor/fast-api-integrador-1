@@ -84,16 +84,11 @@ def borrado_logico(id: int = Path(..., gt=0)):
     response_model=schemas.ProductoStockResponse,
     status_code=status.HTTP_200_OK,
 )
+@router.get("/{id}/stock", response_model=schemas.ProductoStockResponse)
 def consultar_stock(id: int = Path(..., gt=0)):
-    producto = services.obtener_por_id(id)
-    if not producto:
+    resultado = services.obtener_estado_stock(id)  # Llamada al servicio
+    if not resultado:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Producto no encontrado"
         )
-
-    # Cálculo dinámico: stock < stock_minimo
-    alerta_stock = producto.stock < producto.stock_minimo
-
-    return schemas.ProductoStockResponse(
-        stock=producto.stock, bajo_stock_minimo=alerta_stock, activo=producto.activo
-    )
+    return resultado  # El router solo devuelve el resultado

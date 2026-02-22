@@ -45,3 +45,18 @@ def desactivar(id: int) -> Optional[ProductoRead]:
             db_productos[index] = producto_actualizado
             return producto_actualizado
     return None
+
+
+def obtener_estado_stock(id: int) -> Optional[dict]:
+    producto = obtener_por_id(id)
+    if not producto:
+        return None
+
+    # La lógica de negocio vive aquí
+    alerta_stock = producto.stock < producto.stock_minimo
+
+    return {
+        "stock": producto.stock,
+        "bajo_stock_minimo": alerta_stock,
+        "activo": producto.activo,
+    }
