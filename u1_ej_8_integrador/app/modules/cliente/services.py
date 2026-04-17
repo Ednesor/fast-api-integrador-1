@@ -1,42 +1,35 @@
 from typing import List, Optional
-from .schemas import ClienteCreate, ClienteRead
+from sqlmodel import Session, select
+from .schemas import Cliente, ClienteCreate, ClienteRead
 
-db_clientes: List[ClienteRead] = []
-id_counter = 1
-
-def email_existe(email: str) -> bool:
+def email_existe(email: str, session: Session) -> bool:
     """Valida si un email ya está registrado"""
-    for c in db_clientes:
-        if c.email.lower() == email.lower():
-            return True
-    return False
+    statement = select(Cliente).where(Cliente.email == email)
+    return session.exec(statement).first() is not None
 
-def telefono_existe(telefono: Optional[str]) -> bool:
+def telefono_existe(telefono: Optional[str], session: Session) -> bool:
     """Valida si un teléfono ya está registrado"""
     if not telefono:
         return False
-    for c in db_clientes:
-        if c.telefono and c.telefono.lower() == telefono.lower():
-            return True
-    return False
+    statement = select(Cliente).where(Cliente.telefono == telefono)
+    return session.exec(statement).first() is not None
 
-def crear(data: ClienteCreate) -> dict:
+def crear(data: ClienteCreate, session: Session) -> dict:
     """
     Crea un nuevo cliente validando unicidad de email y teléfono.
     Retorna un diccionario con 'success', 'cliente' y opcionalmente 'errores'
     """
-    global id_counter
     errores = []
     
     # Validar email único
-    if email_existe(data.email):
+    if email_existe(data.email, session):
         errores.append({
             "campo": "email",
             "mensaje": f"El email '{data.email}' ya está registrado"
         })
     
     # Validar teléfono único (si se proporciona)
-    if data.telefono and telefono_existe(data.telefono):
+    if data.telefono and telefono_existe(data.telefono, session):
         errores.append({
             "campo": "telefono",
             "mensaje": f"El teléfono '{data.telefono}' ya está registrado"
@@ -47,36 +40,45 @@ def crear(data: ClienteCreate) -> dict:
         return {"success": False, "errores": errores}
     
     # Crear cliente si no hay errores
-    nuevo = ClienteRead(id=id_counter, **data.model_dump())
-    db_clientes.append(nuevo)
-    id_counter += 1
-    return {"success": True, "cliente": nuevo}
+    nuevo = Cliente(**data.model_dump())
+    session.add(nuevo)
+    session.commit()
+    session.refresh(nuevo)
+    return {"success": True, "cliente": ClienteRead.from_orm(nuevo)}
   
-def obtener_todos(skip: int, limit: int) -> List[ClienteRead]:
-    return db_clientes[skip : skip + limit]
+def obtener_todos(skip: int, limit: int, session: Session = None) -> List[ClienteRead]:
+    statement = select(Cliente).offset(skip).limit(limit)
+    clientes = session.exec(statement).all()
+    return [ClienteRead.from_orm(c) for c in clientes]
   
-def obtener_por_id(id: int) -> Optional[ClienteRead]:
-    for c in db_clientes:
-        if c.id == id:
-            return c
+def obtener_por_id(id: int, session: Session = None) -> Optional[ClienteRead]:
+    cliente = session.get(Cliente, id)
+    if cliente:
+        return ClienteRead.from_orm(cliente)
     return None
   
-def actualizar_total(id: int, data: ClienteCreate) -> Optional[ClienteRead]:
-    # Reemplazo total: Requiere todos los campos validables (ClienteCreate)
-    for index, c in enumerate(db_clientes):
-        if c.id == id:
-            cliente_actualizado = ClienteRead(id=id, **data.model_dump())
-            db_clientes[index] = cliente_actualizado
-            return cliente_actualizado
-    return None
+def actualizar_total(id: int, data: ClienteCreate, session: Session) -> Optional[ClienteRead]:
+    cliente = session.get(Cliente, id)
+    if not cliente:
+        return None
+    
+    cliente.nombre = data.nombre
+    cliente.email = data.email
+    cliente.telefono = data.telefono
+    cliente.activo = data.activo
+    
+    session.add(cliente)
+    session.commit()
+    session.refresh(cliente)
+    return ClienteRead.from_orm(cliente)
   
-def desactivar(id: int) -> Optional[ClienteRead]:
-    # Borrado lógico: Solo altera el estado 'activo'
-    for index, c in enumerate(db_clientes):
-        if c.id == id:
-            c_dict = c.model_dump()
-            c_dict["activo"] = False
-            cliente_actualizado = ClienteRead(**c_dict)
-            db_clientes[index] = cliente_actualizado
-            return cliente_actualizado
-    return None
+def desactivar(id: int, session: Session) -> Optional[ClienteRead]:
+    cliente = session.get(Cliente, id)
+    if not cliente:
+        return None
+    
+    cliente.activo = False
+    session.add(cliente)
+    session.commit()
+    session.refresh(cliente)
+    return ClienteRead.from_orm(cliente)

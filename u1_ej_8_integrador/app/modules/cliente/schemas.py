@@ -1,7 +1,14 @@
-from pydantic import BaseModel, Field, EmailStr
+from sqlmodel import SQLModel, Field as SQLField
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 
-class ClienteBase(BaseModel):
+class ClienteBase(SQLModel):
+    nombre: str
+    email: EmailStr
+    telefono: Optional[str] = None
+    activo: bool = True
+    
+class ClienteCreate(BaseModel):
     nombre: str = Field(
         ..., 
         min_length=3, 
@@ -22,9 +29,6 @@ class ClienteBase(BaseModel):
         description="Teléfono del cliente (opcional, entre 7 y 20 caracteres)"
     )
     activo: bool = True
-    
-class ClienteCreate(ClienteBase):
-    pass
 
 class ClienteUpdate(BaseModel):
     nombre: Optional[str] = Field(
@@ -44,6 +48,10 @@ class ClienteUpdate(BaseModel):
         example="555-1234"
     )
     activo: Optional[bool] = None
+
+class Cliente(ClienteBase, table=True):
+    __tablename__ = "clientes"
+    id: Optional[int] = SQLField(default=None, primary_key=True)
     
 class ClienteRead(ClienteBase):
     id: int  # Contrato de salida: siempre incluye el ID generado

@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from app.modules.producto.routers import router as producto_router
 from app.modules.categoria.routers import router as categoria_router
 from app.modules.cliente.routers import router as cliente_router
+from database import create_db
 
 def create_app() -> FastAPI:
     app = FastAPI(
@@ -13,6 +14,8 @@ def create_app() -> FastAPI:
     app.include_router(producto_router)
     app.include_router(categoria_router)
     app.include_router(cliente_router)
+    
+    create_db()
     
     return app
 

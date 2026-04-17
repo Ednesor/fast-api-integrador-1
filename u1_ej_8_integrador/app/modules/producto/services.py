@@ -1,54 +1,63 @@
 from typing import List, Optional
-from .schemas import ProductoCreate, ProductoRead
-
-# Simulamos que la BD guarda objetos tipo ProductoRead (con ID asignado)
-db_productos: List[ProductoRead] = []
-id_counter = 1
+from sqlmodel import Session, select
+from .schemas import Producto, ProductoCreate, ProductoRead
 
 
-def crear(data: ProductoCreate) -> ProductoRead:
-    global id_counter
-    nuevo = ProductoRead(id=id_counter, **data.model_dump())
-    db_productos.append(nuevo)
-    id_counter += 1
-    return nuevo
+def crear(data: ProductoCreate, session: Session) -> ProductoRead:
+    nuevo = Producto(**data.model_dump())
+    session.add(nuevo)
+    session.commit()
+    session.refresh(nuevo)
+    return ProductoRead.from_orm(nuevo)
 
 
-def obtener_todos(skip: int, limit: int) -> List[ProductoRead]:
-    return db_productos[skip : skip + limit]
+def obtener_todos(skip: int, limit: int, session: Session = None) -> List[ProductoRead]:
+    statement = select(Producto).offset(skip).limit(limit)
+    productos = session.exec(statement).all()
+    return [ProductoRead.from_orm(p) for p in productos]
 
 
-def obtener_por_id(id: int) -> Optional[ProductoRead]:
-    for p in db_productos:
-        if p.id == id:
-            return p
+def obtener_por_id(id: int, session: Session = None) -> Optional[ProductoRead]:
+    producto = session.get(Producto, id)
+    if producto:
+        return ProductoRead.from_orm(producto)
     return None
 
 
-def actualizar_total(id: int, data: ProductoCreate) -> Optional[ProductoRead]:
+def actualizar_total(id: int, data: ProductoCreate, session: Session) -> Optional[ProductoRead]:
     # Reemplazo total: Requiere todos los campos validables (ProductoCreate)
-    for index, p in enumerate(db_productos):
-        if p.id == id:
-            producto_actualizado = ProductoRead(id=id, **data.model_dump())
-            db_productos[index] = producto_actualizado
-            return producto_actualizado
-    return None
+    producto = session.get(Producto, id)
+    if not producto:
+        return None
+    
+    producto.nombre = data.nombre
+    producto.categoria = data.categoria
+    producto.precio = data.precio
+    producto.stock = data.stock
+    producto.stock_minimo = data.stock_minimo
+    producto.activo = data.activo
+    
+    session.add(producto)
+    session.commit()
+    session.refresh(producto)
+    return ProductoRead.from_orm(producto)
 
 
-def desactivar(id: int) -> Optional[ProductoRead]:
+def desactivar(id: int, session: Session) -> Optional[ProductoRead]:
     # Borrado lógico: Solo altera el estado 'activo'
-    for index, p in enumerate(db_productos):
-        if p.id == id:
-            p_dict = p.model_dump()
-            p_dict["activo"] = False
-            producto_actualizado = ProductoRead(**p_dict)
-            db_productos[index] = producto_actualizado
-            return producto_actualizado
-    return None
+    producto = session.get(Producto, id)
+    if not producto:
+        return None
+    
+    producto.activo = False
+    session.add(producto)
+    session.commit()
+    session.refresh(producto)
+    return ProductoRead.from_orm(producto)
 
 
-def obtener_estado_stock(id: int) -> Optional[dict]:
-    producto = obtener_por_id(id)
+def obtener_estado_stock(id: int, session: Session) -> Optional[dict]:
+    producto = obtener_por_id(id, session)
     if not producto:
         return None
 

@@ -1,3 +1,5 @@
 fastapi[standard]
 httpx
 email-validator
+sqlmodel>=0.0.14
+psycopg2-binary
